@@ -1,6 +1,6 @@
 
 # load useful packages
-pacman::p_load(here, tidyverse, sf, terra)
+pacman::p_load(here, tidyverse, sf, terra, patchwork)
 
 # set CRS parameters
 CRS_utm <- '+init=EPSG:20935'

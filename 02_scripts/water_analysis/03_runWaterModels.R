@@ -5,7 +5,7 @@
 # ******************************************************************************
 #                             DATA & LIBRARY LOADING
 # ******************************************************************************
-source(here::here('scripts', 'utilities.R'))
+source(here::here('02_scripts', 'utilities.R'))
 i_am('02_scripts/water_analysis/03_runWaterModels.R')
 outdir <- here('03_output', 'water_analysis')
 load(here(outdir, "hydrostats.rdata"))

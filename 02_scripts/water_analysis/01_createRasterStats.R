@@ -71,15 +71,15 @@ files <- list.files(here(datadir, 'ESW_sizes_HY'), full.names=TRUE)
 for (f in files) {
   data <- read.csv(f) %>% 
     group_by(ID, START, END, YEAR) %>% 
-    summarize(MWF_SIZE = mean(MWF_SIZE),
-              ESW_SIZE = sum(ESW_SIZE)) %>% 
+    summarize(MWF_NPX = mean(MWF_NPX),
+              ESW_NPX = sum(ESW_NPX)) %>% 
     mutate(TYPE='HYDROSHED',
            PERIOD = paste(START, END, sep="_"),
            START = ymd(paste0(YEAR, '-', START, "-01")),
            END = ymd(paste0(YEAR, '-', END, "-01")), 
-           ID = as.character(ID)) %>% 
+           ID = as.character(ID),) %>% 
     select(ID, TYPE, PERIOD, YEAR, START, END,
-           ESW_SIZE, MWF_SIZE) %>% 
+           ESW_NPX, MWF_NPX, PX_AREA) %>% 
     ungroup()
   if (is.null(hdata)) hdata <- data
   else hdata <- rbind(hdata, data)
@@ -92,10 +92,11 @@ pds.df <- data.frame(MONTH=1:12,
                               'JUL_SEP', 'JUL_SEP', 'SEP_NOV', 'SEP_NOV', 'NOV_FEB', 'NOV_FEB'))
 
 # load SIZ data
-files <- list.files(here('data', 'ESW_sizes_SIZ'), full.names=TRUE)
+files <- list.files(here(datadir, 'ESW_sizes_SIZ'), full.names=TRUE)
 sizdata = NULL
 for (f in files) {
   name = gsub('.*\\/|_ESW_sizes.csv.*', '', f)
+  print(name)
   data <- read.csv(f) %>% 
     mutate(TYPE='SIZ', MWF_SIZE=NA,
            START=as.POSIXct(as.Date(START, "%m/%d/%y")),
@@ -103,15 +104,17 @@ for (f in files) {
            ) %>% 
     left_join(pds.df, by="MONTH") %>% 
     select_at(names(hdata))
-  data$MWF_SIZE = max(data$ESW_SIZE)
+  data$MWF_NPX = max(data$ESW_NPX)
   if (is.null(sizdata)) sizdata <- data
   else sizdata <- rbind(sizdata, data)
 }
 
-alldata = rbind(hdata, sizdata) 
+alldata = rbind(hdata, sizdata) %>% 
+  mutate(ESW_SIZE_M2 = ESW_NPX * PX_AREA,
+         MWF_SIZE_M2 = MWF_NPX * PX_AREA)
 
 ##############################################################
-#                       DOUBLE CHECKING
+#                       STATS FOR ALL DATA
 ##############################################################
 
 # massage data
@@ -125,15 +128,14 @@ stats <- alldata %>%
   left_join(mar_m, by=c("ID", "YEAR")) %>% 
   left_join(mwf_stats, by=c("ID")) %>%
   mutate(
-    MWF_SIZE = max(ESW_SIZE),
     ID = factor(ID),
     PERIOD = factor(PERIOD, levels=pds),
-    COVER_P = (ESW_SIZE) / MWF_SIZE,
-    COVER_D = myAnomaly(ESW_SIZE),
+    COVER_P = (ESW_SIZE_M2) / MWF_SIZE_M2,
+    COVER_D = myAnomaly(ESW_SIZE_M2),
     MAR_D = myAnomaly(MAR),
     YEAR = factor(YEAR, levels=2019:2025),
     ISFILL = COVER_P > 0,
-    AVG_ESW_SIZE = mean(ESW_SIZE), 
+    AVG_ESW_SIZE = mean(ESW_SIZE_M2), 
     MONTH=month(START)
   ) %>% 
   # remove hydrosheds with max fill less than 1000 pixels
