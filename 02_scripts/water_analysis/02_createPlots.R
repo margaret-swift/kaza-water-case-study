@@ -69,9 +69,9 @@ ggsave(p.fill.siz,
 ############################################################
 # Checking whether data are normally distributed
 ggplot(betadata) + 
-  geom_histogram(aes(x=COVER_P, 
+  geom_histogram(aes(x=logit(COVER_P), 
                      y=..density..), bins=40,color='darkgray', fill='lightgray') +
-  geom_density(aes(x=COVER_P), color='black', linewidth=1.2) + 
+  geom_density(aes(x=logit(COVER_P)), color='black', linewidth=1.2) + 
   xlab('proportion of maximum fill') +
   theme_classic() +
   facet_wrap(~TYPE) +
@@ -92,8 +92,8 @@ ggplot(newstats %>% filter(TYPE == "HYDROSHED", sd_fill<0.2) %>%
 
 # histograms of % fill by hydroshed type
 ggplot(newstats) + 
-  geom_histogram(aes(x=COVER_P, y=..density..), bins=20, color='white') + 
-  geom_density(aes(x=COVER_P), color='black', linewidth=1.2) + 
+  geom_histogram(aes(x=logit(COVER_P), y=..density..), bins=30, color='white') + 
+  geom_density(aes(x=logit(COVER_P)), color='black', linewidth=1.2) + 
   facet_wrap(~FGROUP, ncol=1)
 
 # plotting KAZA regions by different coefficients
