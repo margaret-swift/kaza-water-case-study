@@ -11,6 +11,23 @@ outdir <- here('03_output', 'water_analysis')
 load(here(outdir, "hydrostats.rdata"))
 pacman::p_load(LaplacesDemon,emmeans,
                brms, parameters, tidybayes, tinytable, betareg)
+# ******************************************************************************
+
+# ESW report
+
+stats %>% 
+  st_drop_geometry() %>% 
+  group_by(TYPE, PERIOD) %>% 
+  summarize(m=mean(ESW_SIZE_M2/10000), 
+            sd=sd(ESW_SIZE_M2/10000), 
+  )
+stats %>% 
+  filter(TYPE == "HYDROSHED") %>% 
+  st_drop_geometry() %>% 
+  group_by(PERIOD, YEAR) %>% 
+  summarize(sum(ESW_SIZE_M2/10000)) %>% 
+  View()
+
 
 # ******************************************************************************
 
@@ -20,14 +37,17 @@ pacman::p_load(LaplacesDemon,emmeans,
 ## How does cover percentage change over period for SIZ?
 logidata.siz <- logidata %>% filter(TYPE=="SIZ")
 aov.beta.siz <- aov(COVER_P ~ PERIOD, data = logidata.siz)
-TukeyHSD(aov.beta.siz)
-GGTukey(TukeyHSD(aov.beta.siz))
 
 ## How does cover percentage change over period for HYDROSHEDS?
-logidata.hy <- logidata %>% filter(TYPE!="SIZ")
 aov.beta.hy <- aov(COVER_P ~ PERIOD, data = logidata.hy)
-TukeyHSD(aov.beta.hy)
-GGTukey(TukeyHSD(aov.beta.hy))
+
+# need to run a Kruskal-Wallis test to see if any groups are different
+logidata.hy <- logidata %>% filter(TYPE!="SIZ")
+
+kruskal.test(COVER_P ~ PERIOD, data = logidata.hy)
+# ... and a pairwise Wilcox test to see which ones
+pairwise.wilcox.test(logidata.hy$COVER_P, logidata.hy$PERIOD,
+                     p.adjust.method = "bonf")
 
 
 ## HOW DOES MAR INFLUENCE COVER PERCENTAGE?
@@ -35,15 +55,16 @@ GGTukey(TukeyHSD(aov.beta.hy))
 
 # data are zero-inflated, so let's first run a logistic model to see if there
 ## is a significant effect of MAR on whether there is any water at all.
-m.logi <- glm(ISFILL ~ MAR_D * PERIOD * TYPE, family=binomial(), data=logidata)
+logidata.hy <- logidata %>% filter(TYPE=="HYDROSHED")
+m.logi <- glm(ISFILL ~ MAR_D * PERIOD, family=binomial(), data=logidata.hy)
 summary(m.logi)
 
 # next run a beta model just on (0,1) data:
-m.beta <- betareg(COVER_P ~ MAR_D * PERIOD * TYPE, data = betadata)
+betadata.hy <- betadata %>% filter(TYPE=="HYDROSHED") %>% filter(COVER_P<1)
+m.beta <- betareg(COVER_P ~ MAR_D * PERIOD, 
+                  data = betadata.hy)
 summary(m.beta)
-m.beta2 <- betareg(COVER_P ~ MAR_D * PERIOD, data = betadata)
-summary(m.beta2)
-expcoefs = exp(coef(m.beta2))
+expcoefs = exp(coef(m.beta))
 
 # marginal effect of MAR in general
 cMAR = expcoefs[2]

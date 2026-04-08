@@ -61,6 +61,11 @@ siz_mar_m = rbind(
 #combine them all
 mar_m = rbind(siz_mar_m, hydro_mar_m)
 
+# add some stats and order by year
+mardata = mar_m %>% group_by(YEAR) %>% 
+  summarize(mMAR=mean(MAR), sdMAR=sd(MAR))%>% 
+  arrange(mMAR, desc=TRUE)
+mardata$YEAR = factor(mardata$YEAR, levels=mardata$YEAR)
 
 ##############################################################
 #                       ESW FILL DATA
@@ -70,16 +75,16 @@ hdata = NULL
 files <- list.files(here(datadir, 'ESW_sizes_HY'), full.names=TRUE)
 for (f in files) {
   data <- read.csv(f) %>% 
-    group_by(ID, START, END, YEAR) %>% 
-    summarize(MWF_NPX = mean(MWF_NPX),
-              ESW_NPX = sum(ESW_NPX)) %>% 
+    group_by(ID, START, END, YEAR, PX_AREA) %>% 
+    summarize(MWF_NPIX = mean(MWF_NPIX),
+              ESW_NPIX = sum(ESW_NPIX)) %>% 
     mutate(TYPE='HYDROSHED',
            PERIOD = paste(START, END, sep="_"),
            START = ymd(paste0(YEAR, '-', START, "-01")),
            END = ymd(paste0(YEAR, '-', END, "-01")), 
            ID = as.character(ID),) %>% 
     select(ID, TYPE, PERIOD, YEAR, START, END,
-           ESW_NPX, MWF_NPX, PX_AREA) %>% 
+           ESW_NPIX, MWF_NPIX, PX_AREA) %>% 
     ungroup()
   if (is.null(hdata)) hdata <- data
   else hdata <- rbind(hdata, data)
@@ -97,21 +102,20 @@ sizdata = NULL
 for (f in files) {
   name = gsub('.*\\/|_ESW_sizes.csv.*', '', f)
   print(name)
-  data <- read.csv(f) %>% 
-    mutate(TYPE='SIZ', MWF_SIZE=NA,
+  data <- read.csv(f) %>%
+    mutate(TYPE='SIZ', MWF_NPIX=NA,
            START=as.POSIXct(as.Date(START, "%m/%d/%y")),
            END=as.POSIXct(as.Date(END, "%m/%d/%y")),
-           ) %>% 
-    left_join(pds.df, by="MONTH") %>% 
+           ) %>%
+    left_join(pds.df, by="MONTH") %>%
     select_at(names(hdata))
-  data$MWF_NPX = max(data$ESW_NPX)
+  data$MWF_NPIX = max(data$ESW_NPIX)
   if (is.null(sizdata)) sizdata <- data
   else sizdata <- rbind(sizdata, data)
 }
 
-alldata = rbind(hdata, sizdata) %>% 
-  mutate(ESW_SIZE_M2 = ESW_NPX * PX_AREA,
-         MWF_SIZE_M2 = MWF_NPX * PX_AREA)
+alldata = rbind(hdata, sizdata)
+
 
 ##############################################################
 #                       STATS FOR ALL DATA
@@ -128,20 +132,25 @@ stats <- alldata %>%
   left_join(mar_m, by=c("ID", "YEAR")) %>% 
   left_join(mwf_stats, by=c("ID")) %>%
   mutate(
-    ID = factor(ID),
-    PERIOD = factor(PERIOD, levels=pds),
-    COVER_P = (ESW_SIZE_M2) / MWF_SIZE_M2,
+    # coverage
+    ESW_SIZE_M2 = ESW_NPIX * PX_AREA,
+    MWF_SIZE_M2 = MWF_NPIX * PX_AREA,
+    COVER_P = ESW_NPIX / MWF_NPIX,
     COVER_D = myAnomaly(ESW_SIZE_M2),
-    MAR_D = myAnomaly(MAR),
-    YEAR = factor(YEAR, levels=2019:2025),
-    ISFILL = COVER_P > 0,
     AVG_ESW_SIZE = mean(ESW_SIZE_M2), 
-    MONTH=month(START)
+    ISFILL = COVER_P > 0,
+    # rainfall
+    MAR_D = myAnomaly(MAR),
+    # misc
+    YEAR = factor(YEAR, levels=2019:2025),
+    PERIOD = factor(PERIOD, levels=pds),
+    MONTH=month(START),
+    ID = factor(ID),
   ) %>% 
   # remove hydrosheds with max fill less than 1000 pixels
-  filter(MWF_SIZE > 1000)
+  filter(MWF_SIZE_M2 > 1000)
 
-fill_stats = stats %>% 
+fill_stats = stats %>%
   group_by(ID) %>% 
   summarize(mean_fill = mean(COVER_P, na.rm=TRUE), 
             sd_fill = sd(COVER_P, na.rm=TRUE)) %>% 
@@ -156,10 +165,15 @@ sdat = stats %>% st_drop_geometry() %>%
 stats = stats %>% 
   left_join(fill_stats, by="ID") %>% 
   left_join(hydro_shp, by="ID") %>% 
+  mutate(FGROUP = case_when( mean_fill > 0.8 ~ 1,
+                             mean_fill > 0.4 ~ 2,
+                             mean_fill > 0.2 ~ 3,
+                             .default = 4),
+         GROUP = ifelse(sd_fill / mean_fill > 0.35, "fugitive", "persistent")) %>% 
   st_as_sf()
 
 logidata = stats %>% st_drop_geometry() %>% as.data.frame()
 betadata = logidata %>% filter(ISFILL)
 save(stats, fill_stats, sdat, hdata, sizdata, alldata,
-     siz_catch_mar, mar_m, 
+     siz_catch_mar, mar_m, mardata,
      logidata, betadata, file=here(outdir, "hydrostats.rdata"))

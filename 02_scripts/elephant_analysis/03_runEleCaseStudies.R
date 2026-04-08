@@ -154,9 +154,9 @@ runAllAnalyses <- function(dist_T) {
 
 # Run Tukey HSD and AOV on water visitation data
 timeSteps = c(50, 100, 200, 322, 644)
-for (t in timeSteps) {
-  runAllAnalyses(t)
-}
+# for (t in timeSteps) {
+#   runAllAnalyses(t)
+# }
 
 # Create plot (Fig 5) for % of data under threshold for each T
 mdat = do.call(rbind, lapply(timeSteps, makeStats)) %>% as.data.frame() %>% 
@@ -199,6 +199,7 @@ ele.13 %>% st_drop_geometry() %>%
          GSW_p48 = GSW_n48 / total)
 
 #  H2A: % of ele GPS points that drink every 48hr is higher for ESW than GSW
+ele.13 = createEle13(322)
 sdat2 <- ele.13 %>% group_by(SEX) %>% st_drop_geometry() %>% 
   summarize(n=n(),
             mhours_GSW = round(mean(THIRST_GSW)),
@@ -208,22 +209,20 @@ sdat2 <- ele.13 %>% group_by(SEX) %>% st_drop_geometry() %>%
   )
 mGSW = round(mean(ele.13$THIRST_GSW))
 mesw = round(mean(ele.13$THIRST_ESW))
-ggplot(ele.13 %>% mutate(is_close = THIRST_GSW < t+2)) + 
-  geom_histogram(aes(x=THIRST_GSW, fill=is_close), binwidth=19.8, color='white')  +
-  geom_vline(xintercept=t, linetype='dashed', linewidth=0.7, color='#ED008D') +
+ggplot(ele.13 %>% mutate(is_close = THIRST_GSW < time_T)) + 
+  geom_histogram(aes(x=THIRST_GSW, fill=is_close), binwidth=19, color='white')  +
   scale_x_continuous(n.breaks=15, limits=c(0, 1200)) +
-  scale_fill_manual(values=c('black', 'purple')) +
-  theme_classic() +
+  scale_fill_manual(values=c('black', 'blue')) +
+  theme_minimal() +
   guides(fill="none") + xlab('') + ylab('') + 
   theme(text=element_text(size=16))
 
-ggplot(ele.13 %>% mutate(is_close = THIRST_ESW < t)) + 
+ggplot(ele.13 %>% mutate(is_close = THIRST_ESW < time_T)) + 
   geom_histogram(aes(x=THIRST_ESW, fill=is_close), bins=100, color='white')  +
-  scale_fill_manual(values=c('black', 'purple')) +
-  geom_vline(xintercept=t, linetype='dashed', linewidth=0.7, color='#ED008D') +
+  scale_fill_manual(values=c('black', 'red')) +
   scale_x_continuous(n.breaks=15, limits=c(0, 100)) +
   scale_y_continuous(limits=c(0, 17000)) +
-  theme_classic() +
+  theme_minimal() +
   guides(fill="none") + xlab('') + ylab('') + 
   theme(text=element_text(size=16))
 

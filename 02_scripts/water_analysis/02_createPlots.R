@@ -11,133 +11,129 @@ load(here(outdir, "hydrostats.rdata"))
 pacman::p_load(LaplacesDemon) # logit and invlogit
 
 ############################################################
-############################################################
-# SANDBOX
-x=stats %>% st_drop_geometry() %>% 
-  filter(TYPE == "HYDROSHED") %>% 
-  group_by(PERIOD, YEAR) %>% 
-  summarize(fill = sum(ESW_SIZE))
-hist(x$fill, 30)
-
+#                           THEMES
 ############################################################
 
-# Mean Annual Rainfall (MAR) for KAZA aggregated regionally
-mardata = mar_m %>% group_by(YEAR) %>% 
-  summarize(mMAR=mean(MAR), sdMAR=sd(MAR))
-p.rainfall = ggplot(mardata, aes(x=factor(YEAR), y=mMAR)) + 
+# https://emilhvitfeldt.github.io/r-color-palettes/discrete/awtools/a_palette/
+colors.ptd = c( "#019875FF", "#315c4d","#99B898FF", "#FECEA8FF", "#FF847CFF")
+colors.ys = c('#fa3628', '#ff7a70', '#ffaca6',
+             '#c4a8f0', "#a071eb", '#5d27b3', '#4c2a80', '#2d026e')
+colors.siz = c('#6988cf', '#c0cef0', 'black', '#346beb',
+               '#24304f', '#b8c0d9')
+plot.theme = theme_minimal() + theme(text=element_text(size=15))
+
+############################################################
+#                           FIGURE 4
+############################################################
+
+# Fig. 4a: Mean Annual Rainfall (MAR) for KAZA aggregated regionally
+p.rainfall = ggplot(mardata,
+                    aes(x=as.character(YEAR), y=mMAR, fill=YEAR)) + 
+  geom_hline(yintercept=mean(mardata$mMAR), color='#35323b', linetype="dashed") +
   geom_bar(stat='identity') + 
-  geom_segment(aes(y=mMAR-sdMAR, yend=mMAR+sdMAR), color='darkgray') +
-  theme_classic() + ylab('mm MAR') + xlab('year') +
-  theme(text=element_text(size=15))
+  geom_point(aes(x=YEAR, y=mMAR-sdMAR)) +
+  geom_point(aes(x=YEAR, y=mMAR+sdMAR)) +
+  geom_segment(aes(y=mMAR-sdMAR, yend=mMAR+sdMAR), 
+               color='#35323b') +
+  ylab('mm MAR') + xlab('year')  +
+  plot.theme + guides(fill="none") + 
+  scale_fill_manual(values=colors.ys)
 p.rainfall
-ggsave(p.rainfall, 
+ggsave(p.rainfall,
        file=here(outdir, 'plots', 'KAZA_MAR.png'),
-       width=10, height=3)
+       width=12, height=3)
 
-############################################################
-# Plotting total water fill over time 
-
-# Hydroshed water fill levels
-colors = RColorBrewer::brewer.pal(6, 'BrBG')[c(5,6,3,2,1)]
-p.fill.hy = ggplot() + 
-  geom_bar(data=stats %>% filter(TYPE == "HYDROSHED"),
-           aes(x=PERIOD, y=ESW_SIZE_M2, fill=PERIOD),
-           position="stack", stat="identity") +
+# Fig. 4b: Hydroshed water fill levels
+p.fill.hy = ggplot(data=stats %>% filter(TYPE == "HYDROSHED"),
+                   aes(x=PERIOD, y=ESW_SIZE_M2/10000, fill=PERIOD)) + 
+  geom_bar(position="stack", stat="identity") +
   facet_wrap(~YEAR, nrow=1, scales="free_x") +
-  theme_classic() + ylab('ESW fill (km2)') + 
-  xlab('time') +
-  theme(text=element_text(size=15)) +
-  scale_fill_manual(values=colors)
-ggsave(p.fill.hy, 
+  ylab('ESW fill (km2)') + xlab('') +
+  scale_fill_manual(values=colors) +
+  plot.theme + guides(fill="none") + 
+  theme(axis.text.x = element_blank())
+p.fill.hy
+ggsave(p.fill.hy,
        file=here(outdir, 'plots', 'KAZA_total_fill_HY.png'),
-       width=10, height=6)
+       width=10, height=4)
 
-# SIZ water fill levels
-p.fill.siz = ggplot(data=stats %>% filter(TYPE == "SIZ"),
-       aes(x=START, y=ESW_SIZE_M2, 
-           color=ID)) + 
-  geom_point() + geom_line() +
-  theme_classic() + ylab('ESW fill (km2)') + 
-  xlab('time') +
-  theme(text=element_text(size=15)) + 
-  scale_x_date(date_breaks="3 months", 
-               date_labels='%b')
+# Fig. 4c: SIZ water fill levels
+buildPlot <- function(ids, colors) {
+  p = ggplot(data=stats %>% filter(id %in% ids), 
+             aes(x=START, y=ESW_SIZE_M2/10000, color=ID)) + 
+    geom_point(size=0.5) + geom_line() +
+    ylab('ESW fill (km2)') + xlab('') +
+    plot.theme +
+    scale_color_manual(values=colors) +
+    scale_x_date(date_breaks="4 months", 
+                 date_labels='%b') + 
+    guides(color="none")
+  p
+}
+p1 = buildPlot(c("Kariba", "Zambezi", "Okavango", "Makgadikgadi"), colors.siz[1:4])
+p2 = buildPlot(c("Chobe", "Linyanti"), colors.siz[5:6])
+p.fill.siz = (p1 + theme(axis.text.x = element_blank())) / 
+              p2 + plot_layout(ncol=1, heights=c(3,1))
+p.fill.siz
 ggsave(p.fill.siz, 
        file=here(outdir, 'plots', 'KAZA_total_fill_SIZ.png'),
-       width=10, height=6)
-
-############################################################
-# Checking whether data are normally distributed
-ggplot(betadata) + 
-  geom_histogram(aes(x=logit(COVER_P), 
-                     y=..density..), bins=40,color='darkgray', fill='lightgray') +
-  geom_density(aes(x=logit(COVER_P)), color='black', linewidth=1.2) + 
-  xlab('proportion of maximum fill') +
-  theme_classic() +
-  facet_wrap(~TYPE) +
-  theme(text=element_text(size=15))
+       width=10, height=5)
 
 
 ############################################################
-### PLOTTING SEASONALITY BY GROUP ###
-newstats = stats %>%   
-  mutate(FGROUP = case_when( mean_fill > 0.8 ~ 1,
-                            mean_fill > 0.25 ~ 2, 
-                            .default = 3))
-ggplot(newstats %>% filter(TYPE == "HYDROSHED", sd_fill<0.2) %>% 
-         mutate(ID = as.numeric(ID)),
-       aes(x=START, y=COVER_P, group=ID, color=ID)) + 
-  geom_point() + geom_line() + 
-  facet_wrap(~FGROUP, ncol=1)
+#                           FIGURE 5
+############################################################
 
-# histograms of % fill by hydroshed type
-ggplot(newstats) + 
-  geom_histogram(aes(x=logit(COVER_P), y=..density..), bins=30, color='white') + 
-  geom_density(aes(x=logit(COVER_P)), color='black', linewidth=1.2) + 
-  facet_wrap(~FGROUP, ncol=1)
-
-# plotting KAZA regions by different coefficients
-mar_avg = mar_m %>% 
-  group_by(ID) %>% 
-  summarize(MMAR = mean(MAR))
-fill_sf = fill_stats %>% 
-  left_join(hydro_shp, by="ID") %>% 
-  left_join(mar_avg, by="ID") %>% 
-  st_as_sf()
-ggplot(fill_sf) + geom_sf(aes(fill=MMAR * mean_slope)) +
-  scale_fill_distiller(palette="BrBG", direction=-1)
-ggplot(fill_sf) + geom_sf(aes(fill=mean_fill)) +
-  scale_fill_distiller(palette="BrBG", direction=-1)
-ggplot(fill_sf) + geom_sf(aes(fill=mean_slope)) + 
-  scale_fill_distiller(palette="BrBG", direction=-1)
-
-# Figure 4a - fill anomaly vs period
-p4a = ggplot(stats, aes(x=PERIOD, group=YEAR, color=YEAR)) + 
+# Figure 5a - fill anomaly vs period
+sdat.hy = sdat%>% filter(TYPE == "HYDROSHED") %>% 
+  mutate(YEAR = factor(YEAR, levels=mardata$YEAR))
+stats.hy = stats %>% filter(COVER_P<1, TYPE == "HYDROSHED")%>% 
+  mutate(YEAR = factor(YEAR, levels=mardata$YEAR))
+p5a = ggplot(stats.hy, aes(x=PERIOD, group=YEAR, color=YEAR)) + 
   geom_hline(yintercept=0, linetype='dashed') +
   geom_jitter(aes(y=COVER_P), width=0.215, shape=1, alpha=0.7) +
-  geom_line(data=sdat, aes(y=cover_mu)) +
-  geom_point(data=sdat, aes(y=cover_mu), size=2.5, color="black") +
-  geom_point(data=sdat, aes(y=cover_mu), width=0.2) +
-  xlab("period") + ylab('% of maximum fill') +
-  facet_wrap(~TYPE, nrow=2) +
-  theme_classic() +
-  theme(text=element_text(size=15)) + 
+  geom_line(data=sdat.hy, aes(y=cover_mu), linewidth=1) +
+  geom_point(data=sdat.hy, aes(y=cover_mu), size=2.5, color="black") +
+  geom_point(data=sdat.hy, aes(y=cover_mu), width=0.2) +
+  xlab("pentad") + ylab('pMWF') +
   guides(color="none") +
-  theme( strip.text.x = element_blank() )
+  plot.theme +
+  scale_color_manual(values=colors.ys)
+p5a
+ggsave(p5a,
+       file=here(outdir, 'plots', 'Figure5_a.png'),
+       width=5, height=5)
 
-# Figure 4b - Beta model of fill vs precip by period
-p4b = ggplot(data=betadata, aes(x=MAR_D, y=logit(COVER_P), color=TYPE)) + 
+# Figure 5b - Beta model of fill vs precip by period
+p5b = ggplot(data=stats %>% filter(COVER_P<1, COVER_P>0),
+             aes(x=MAR_D, y=COVER_P, color=PERIOD)) + 
   geom_point(size=0.3) + 
   geom_smooth(method="lm") +
   geom_vline(xintercept=0, linetype='dashed') +
-  facet_wrap(~PERIOD, nrow=1) + 
-  theme_classic() +
-  xlab('normalized MAR') + 
+  xlab('dMAR') + 
   ylab('logit (pMWF)') +
-  theme(text=element_text(size=15)) +
+  plot.theme +
   theme( strip.text.x = element_blank() ) + 
-  guides(color=guide_legend(title='')) +
-  scale_color_manual(values=c('darkgray', 'blue'))
-p4b
-p4a + p4b
+  guides(color=guide_legend(title='')) + 
+  scale_color_manual(values=colors.ptd) + 
+  guides(color="none")
+p5b
+ggsave(p5b,
+       file=here(outdir, 'plots', 'Figure5_b.png'),
+       width=5, height=5)
 
+############################################################
+#                      EXTRA FIGURES
+############################################################
+
+# Line graph of fill levels over time
+ggplot(groups, aes(x=START, y=COVER_D, group=ID)) + 
+  geom_point(size=0.5) + geom_line(alpha=0.3) +
+  facet_wrap(~GROUP, ncol=1, scales="free_y") + 
+  theme_minimal() + theme(text=element_text(size=15))
+groups %>% 
+  filter(START==as.Date('2019-02-01')) %>% 
+  ggplot() + 
+  geom_point(aes(y=mean_fill, x=sd_fill, color=GROUP)) + 
+  geom_abline(slope=1, intercept=0)+ 
+  theme_minimal() + theme(text=element_text(size=15))
