@@ -6,6 +6,8 @@ Swift, M.E., Songhurst, A., McCulloch, G., Beytell, P., Naidoo, R. 2026.
   "Mapping small-scale ephemeral surface water to inform transfrontier conservation 
   planning in southern Africa". Ecosphere.
 
+  ECS26-0338
+
 This repository holds code for two analyses run for this paper: water_analysis and elephant_analysis. 
 
 ## 01_data
